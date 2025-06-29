@@ -18,6 +18,10 @@ def load_mesh(file_path):
     Returns:
         tuple: (mesh, vertices, normals) arrays
     """
+    if not os.path.exists(file_path):
+        logger.error(f"File not found: {file_path}")
+        raise FileNotFoundError(f"File not found: {file_path}")
+
     mesh = o3d.io.read_triangle_mesh(file_path)
     vertices = np.asarray(mesh.vertices)
     normals = np.asarray(mesh.vertex_normals)
@@ -157,3 +161,32 @@ def save_gif(frame_files, gif_path, duration=0.1):
     # Clean up temporary files
     for file in frame_files:
         os.remove(file)
+
+
+def build_mesh(vertices, normals):
+    """Reconstructs a mesh from a point cloud using Poisson surface reconstruction."""
+    logger.info(
+        "Input is a point cloud. Reconstructing a mesh for curvature analysis..."
+    )
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(vertices)
+
+    if normals is None or len(normals) == 0:
+        logger.info("No normals found, estimating normals for reconstruction...")
+        pcd.estimate_normals(
+            search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30)
+        )
+    else:
+        pcd.normals = o3d.utility.Vector3dVector(normals)
+
+    pcd.orient_normals_consistent_tangent_plane(100)
+
+    logger.info("Running Poisson surface reconstruction...")
+    mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
+        pcd, depth=8
+    )
+
+    logger.info("Cropping mesh based on density to remove artifacts...")
+    vertices_to_remove = densities < np.quantile(densities, 0.05)
+    mesh.remove_vertices_by_mask(vertices_to_remove)
+    return mesh

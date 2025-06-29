@@ -4,7 +4,6 @@ import re
 from logger import add_file_handler, logger
 
 
-
 def is_project_id(folder_name):
     """
     Check if a folder name matches the expected pattern (XX-XXXXX).
@@ -63,9 +62,6 @@ def rename_scanned_folders(data_dir, folder_info):
     Args:
         data_dir (str): Path to the data directory
         folder_info (list): List of dictionaries containing folder information
-
-    Returns:
-        bool: True if folders were renamed, False otherwise
     """
     # If one folder has the required files and the other doesn't, rename them
     if folder_info[0]["has_required_files"] != folder_info[1]["has_required_files"]:
@@ -82,12 +78,10 @@ def rename_scanned_folders(data_dir, folder_info):
                 logger.warning(
                     f"  Cannot rename {folder['name']} to {new_name}: destination already exists"
                 )
-        return True
     else:
         logger.info(
             f"  Folders in {data_dir} have same status for required files, skipping..."
         )
-        return False
 
 
 def process_project_folder(folder_path):
@@ -96,17 +90,14 @@ def process_project_folder(folder_path):
 
     Args:
         folder_path (str): Path to the numbered folder
-
-    Returns:
-        bool: True if processing was successful, False otherwise
     """
-    folder_name = os.path.basename(folder_path)
-    logger.info(f"Processing project folder: {folder_name}")
+    project_id = os.path.basename(folder_path)
+    logger.info(f"Processing project folder: {project_id}")
 
     data_dir = os.path.join(folder_path, "data")
     if not os.path.isdir(data_dir):
-        logger.warning(f"No 'data' folder found in {folder_name}, skipping...")
-        return False
+        logger.warning(f"No 'data' folder found in {folder_path}, skipping...")
+        return
 
     # Get time-stamped folders within data folder
     scan_folders = get_scan_folders(data_dir)
@@ -114,9 +105,9 @@ def process_project_folder(folder_path):
     # Check if we have exactly 2 folders
     if len(scan_folders) != 2:
         logger.warning(
-            f"  Expected 2 scan folders in {folder_name}/data, found {len(scan_folders)}, skipping..."
+            f"  Expected 2 scan folders in {project_id}/data, found {len(scan_folders)}, skipping..."
         )
-        return False
+        return
 
     # Check which folder contains the required files
     folder_info = [
@@ -131,7 +122,63 @@ def process_project_folder(folder_path):
     ]
 
     # Rename the folders if needed
-    return rename_scanned_folders(data_dir, folder_info)
+    rename_scanned_folders(data_dir, folder_info)
+
+
+def update_revo_file(folder_path):
+    """
+    Update the .revo file content based on renamed folders in the data directory.
+    If the correctly named .revo file doesn't exist, it tries to find and rename one.
+    """
+    project_id = os.path.basename(folder_path)
+    revo_path = os.path.join(folder_path, f"{project_id}.revo")
+
+    if not os.path.exists(revo_path):
+        # If the specific .revo file doesn't exist, search for any .revo file
+        try:
+            found_revos = [f for f in os.listdir(folder_path) if f.endswith(".revo")]
+        except FileNotFoundError:
+            logger.error(
+                f"  Could not find project folder at {folder_path} to search for .revo file."
+            )
+            return
+
+        if len(found_revos) == 0:
+            logger.warning(f"  No .revo file found in {project_id}, skipping update.")
+            return
+        elif len(found_revos) > 1:
+            logger.warning(
+                f"  Multiple .revo files found in {project_id}: {found_revos}. Skipping due to ambiguity."
+            )
+            return
+        else:
+            # Exactly one .revo file found, rename it.
+            old_revo_path = os.path.join(folder_path, found_revos[0])
+            logger.info(
+                f"  Found '{found_revos[0]}', renaming to '{os.path.basename(revo_path)}'"
+            )
+            try:
+                os.rename(old_revo_path, revo_path)
+            except OSError as e:
+                logger.error(f"  Failed to rename .revo file: {e}")
+                return
+
+    data_dir = os.path.join(folder_path, "data")
+    sub_folder_names = os.listdir(data_dir)
+
+    with open(revo_path, "r", encoding="utf-8") as f:
+        content = f.read()
+        original_content = content
+
+    for sub_folder_name in sub_folder_names:
+        if sub_folder_name.startswith("STD_") or sub_folder_name.startswith("ATR_"):
+            old_name = sub_folder_name[4:]
+            content = content.replace(f'"{old_name}"', f'"{sub_folder_name}"')
+
+    if content != original_content:
+        with open(revo_path, "w", encoding="utf-8") as f:
+            f.write(content)
+        logger.success(f"{project_id}.revo file updated successfully.")
 
 
 def rename_folders(root_dir):
@@ -140,11 +187,7 @@ def rename_folders(root_dir):
 
     Args:
         root_dir (str): Path to the root directory containing project folders
-
-    Returns:
-        int: Number of folders successfully processed
     """
-    processed_count = 0
 
     # Get all folders in the root directory
     for subdir in os.listdir(root_dir):
@@ -154,20 +197,17 @@ def rename_folders(root_dir):
             continue
 
         logger.info(f"Processing subdirectory: {subdir_path}")
-        for item in os.listdir(subdir_path):
-            item_path = os.path.join(subdir_path, item)
+        for project_id in os.listdir(subdir_path):
+            project_path = os.path.join(subdir_path, project_id)
 
             # Check if it's a directory and matches the pattern
-            if os.path.isdir(item_path) and is_project_id(item):
-                if process_project_folder(item_path):
-                    processed_count += 1
-
-    return processed_count
+            if os.path.isdir(project_path) and is_project_id(project_id):
+                process_project_folder(project_path)
+                update_revo_file(project_path)
 
 
 if __name__ == "__main__":
     add_file_handler()
     root_dir = "/mnt/c/Users/10178/The Chinese University of Hong Kong/Wai Ping Fiona Yu (ORT) - 3D Back Images"
-    
-    num_processed = rename_folders(root_dir)
-    logger.success(f"Folder renaming complete. Processed {num_processed} folders.")
+
+    rename_folders(root_dir)

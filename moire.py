@@ -14,7 +14,7 @@ from utils.ply_utils import (
 )
 
 
-def get_output_path(file_path, output_dir="out/img"):
+def get_output_path(file_path, output_dir=os.path.join("out", "img", "moire")):
     """
     Generate output image path based on input PLY file path.
 
@@ -34,11 +34,13 @@ def get_output_path(file_path, output_dir="out/img"):
         project_id = path_match.group(1)
         scan_type = path_match.group(2)
         file_type = path_match.group(3)
-        output_path = f"{output_dir}/{project_id}_{scan_type}_{file_type}.png"
+        output_path = os.path.join(
+            output_dir, f"{project_id}_{scan_type}_{file_type}.png"
+        )
     else:
         # Use filename as fallback
         base_name = os.path.splitext(os.path.basename(file_path))[0]
-        output_path = f"{output_dir}/{base_name}.png"
+        output_path = os.path.join(output_dir, f"{base_name}.png")
 
     return output_path
 
@@ -180,6 +182,6 @@ if __name__ == "__main__":
     add_file_handler()
     get_moire_imgs(
         directory="data",
-        pattern=r".*point_cloud\.ply$",
+        pattern=r".*mesh\.ply$",
         num_levels=100,
     )
