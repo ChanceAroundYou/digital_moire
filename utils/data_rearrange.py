@@ -69,10 +69,10 @@ def copy_with_hash_check(src_path, dst_path):
         dst_mtime = os.path.getmtime(dst_path)
 
         if src_mtime > dst_mtime:
-            logger.info(f"Source file {src_path} is newer, replacing destination")
+            logger.success(f"Copying {src_path} to {dst_path}")
             shutil.copy2(src_path, dst_path)
         else:
-            logger.info(f"Destination file {dst_path} is newer, keeping it")
+            logger.debug(f"Destination file {dst_path} is newer, keeping it")
 
 
 def copy_scan_files(scan_dir, project_output_dir, scan_type):
