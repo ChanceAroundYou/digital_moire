@@ -86,8 +86,8 @@ def copy_scan_files(scan_dir, project_output_dir, scan_type):
     """
     # Define mapping of source files to destination names
     file_mappings = {
-        "fuse.ply": f"{scan_type}_point_cloud.ply",
-        "fuse_mesh.ply": f"{scan_type}_mesh.ply",
+        "fuse.ply": f"{scan_type}_fuse.ply",
+        "fuse_mesh.ply": f"{scan_type}_fuse_mesh.ply",
     }
 
     # Copy each file if it exists

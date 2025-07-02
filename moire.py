@@ -5,48 +5,23 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from utils.logger import add_file_handler, logger
-from utils.ply_utils import (
+from utils.mesh import (
     apply_rotation,
-    calculate_plane_distances,
-    create_rotation_matrices,
+    calculate_distance_from_plane,
+    get_output_path,
     load_mesh,
     save_img,
 )
 
 
-def get_output_path(file_path, output_dir=os.path.join("out", "img", "moire")):
-    """
-    Generate output image path based on input PLY file path.
-
-    Args:
-        file_path (str): Path to the input PLY file
-        output_dir (str): Directory to save output files
-
-    Returns:
-        str: Path for the output image file
-    """
-    os.makedirs(output_dir, exist_ok=True)
-
-    # Try to extract information from the path
-    path_match = re.match(r".*/(\d{2}-\d{5})/(STD|ATR)_([^.]+)\.ply", file_path)
-
-    if path_match:
-        project_id = path_match.group(1)
-        scan_type = path_match.group(2)
-        file_type = path_match.group(3)
-        output_path = os.path.join(
-            output_dir, f"{project_id}_{scan_type}_{file_type}.png"
-        )
-    else:
-        # Use filename as fallback
-        base_name = os.path.splitext(os.path.basename(file_path))[0]
-        output_path = os.path.join(output_dir, f"{base_name}.png")
-
-    return output_path
-
-
-def create_moire_visualization(
-    vertices, distances, levels=None, num_levels=100, facecolor="gray"
+def visualize_moire(
+    mesh,
+    distances,
+    levels=None,
+    num_levels=100,
+    background_color="gray",
+    output_path=None,
+    bbox_inches="tight"
 ):
     """
     Create a Moiré pattern visualization based on distance levels.
@@ -61,8 +36,8 @@ def create_moire_visualization(
     Returns:
         tuple: (fig, ax) matplotlib figure and axis
     """
-    # Create figure and axis
-    fig, ax = plt.subplots(figsize=(10, 10), facecolor=facecolor)
+    vertices = np.asarray(mesh.vertices)
+    fig, ax = plt.subplots(figsize=(10, 10), facecolor=background_color)
 
     # Calculate distance levels
     if levels is None:
@@ -79,12 +54,13 @@ def create_moire_visualization(
     ax.set_aspect("equal")
     ax.axis("off")
 
-    return fig, ax
+    if output_path is not None:
+        save_img(fig, output_path, bbox_inches=bbox_inches)
 
 
 def get_moire_img(
     file_path,
-    image_path=None,
+    output_path=None,
     is_save=True,
     rotation_x_angle=0,
     rotation_y_angle=0,
@@ -94,6 +70,7 @@ def get_moire_img(
     plane_c=1,
     plane_d=20,
     num_levels=100,
+    background_color="gray",
 ):
     """
     Load a PLY file and process it to create a Moiré pattern visualization.
@@ -107,30 +84,22 @@ def get_moire_img(
         a, b, c, d: Plane equation coefficients (ax + by + cz + d = 0)
         num_levels (int): Number of contour levels for the visualization
     """
-    # Determine output path if not provided
-    if image_path is None:
-        image_path = get_output_path(file_path)
-
     logger.info(f"Processing {file_path}")
 
-    # Load the mesh
-    _, vertices, _ = load_mesh(file_path)
+    mesh = load_mesh(file_path, is_build_mesh=False)
+    mesh = apply_rotation(mesh, rotation_x_angle, rotation_y_angle, rotation_z_angle)
+    distances = calculate_distance_from_plane(mesh, plane_a, plane_b, plane_c, plane_d)
 
-    # Apply rotations
-    Rx, Ry, Rz = create_rotation_matrices(
-        rotation_x_angle, rotation_y_angle, rotation_z_angle
+    if output_path is None and is_save:
+        output_path = get_output_path(file_path, output_type="moire")
+
+    visualize_moire(
+        mesh,
+        distances,
+        num_levels=num_levels,
+        background_color=background_color,
+        output_path=output_path,
     )
-    vertices = apply_rotation(vertices, Rx, Ry, Rz)
-
-    # Calculate distances to the reference plane
-    distances = calculate_plane_distances(vertices, plane_a, plane_b, plane_c, plane_d)
-
-    # Create visualization
-    fig, _ = create_moire_visualization(vertices, distances, num_levels=num_levels)
-
-    # Save the result
-    if is_save:
-        save_img(fig, image_path)
 
 
 def get_moire_imgs(
@@ -143,8 +112,9 @@ def get_moire_imgs(
     plane_a=0,
     plane_b=0,
     plane_c=1,
-    plane_d=20,
+    plane_d=1,
     num_levels=100,
+    background_color="gray",
 ):
     """
     Process multiple PLY files in a directory.
@@ -170,6 +140,7 @@ def get_moire_imgs(
                     plane_c=plane_c,
                     plane_d=plane_d,
                     num_levels=num_levels,
+                    background_color=background_color,
                 )
 
 
