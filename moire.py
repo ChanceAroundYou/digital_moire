@@ -21,7 +21,7 @@ def visualize_moire(
     num_levels=100,
     background_color="gray",
     output_path=None,
-    bbox_inches="tight"
+    bbox_inches="tight",
 ):
     """
     Create a Moiré pattern visualization based on distance levels.
